@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+trigger-ansible-dependencies() {
+  declare desc="installs dependencies for the ansible plugin"
+  declare trigger="dependencies"
+
+  case "$DOKKU_DISTRO" in
+    debian | raspbian)
+      export DEBIAN_FRONTEND=noninteractive
+      if command -v ansible &>/dev/null; then
+        return
+      fi
+
+      OS_ID="$(lsb_release -cs 2>/dev/null || echo "focal")"
+      if [[ "$OS_ID" == "buster" ]]; then
+        OS_ID="bionic"
+      elif [[ "$OS_ID" == "bullseye" ]]; then
+        OS_ID="focal"
+      fi
+      echo "deb http://ppa.launchpad.net/ansible/ansible/ubuntu $OS_ID main" > /etc/apt/sources.list.d/ansible.list
+      apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367
+      apt update
+      apt-get -qq -y --no-install-recommends install -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install ansible
+      ;;
+
+    ubuntu)
+      export DEBIAN_FRONTEND=noninteractive
+      if command -v ansible &>/dev/null; then
+        return
+      fi
+
+      apt update
+      add-apt-repository --yes --update ppa:ansible/ansible
+      apt-get -qq -y --no-install-recommends install -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install ansible
+      ;;
+
+  esac
+}
+
+trigger-ansible-dependencies "$@"

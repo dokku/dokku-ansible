@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -eo pipefail
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
+[[ $DOKKU_TRACE ]] && set -x
+
+trigger-ansible-pre-receive-app() {
+  declare APP="$1" IMAGE_SOURCE_TYPE="$2" TMP_WORK_DIR="$3" REV="$4"
+  local ansible_dokku_path=".dokku/ansible"
+  local ansible_playbook_file="$ansible_dokku_path/playbook.yml"
+  local ansible_hosts_file="$ansible_dokku_path/inventory"
+  local ansible_galaxy_requirements_file="$ansible_dokku_path/requirements.yml"
+
+  if [[ ! -f "$ansible_playbook_file" ]]; then
+    return
+  fi
+
+  if ! command -v ansible &>/dev/null; then
+    dokku_log_fail "Ansible not detected on PATH, please install plugin dependencies"
+  fi
+
+  dokku_log_info1 "Running ansible playbook"
+  dokku_log_verbose "Creating localhost hosts file"
+  touch "$ansible_hosts_file"
+  echo "[local]" >> "$ansible_hosts_file"
+  echo "localhost ansible_connection=local" >> "$ansible_hosts_file"
+
+  if [[ -f "$ansible_galaxy_requirements_file" ]]; then
+    dokku_log_verbose "Installing galaxy requirements"
+    mkdir -p "$ansible_dokku_path/roles"
+    ansible-galaxy install --roles-path "$ansible_dokku_path/roles" -r "$ansible_galaxy_requirements_file" | sed -u "s/^/       /"
+    if [[ "${PIPESTATUS[0]}" != 0 ]]; then
+      dokku_log_fail "Failed to install ansible galaxy dependencies"
+    fi
+  fi
+
+  if [[ -d "$ansible_dokku_path/roles/dokku_bot.ansible_dokku/tasks" ]]; then
+    dokku_log_verbose "Deleting ansible tasks from dokku module"
+    rm -r "$ansible_dokku_path/roles/dokku_bot.ansible_dokku/tasks"
+  fi
+
+  if [[ -d "$ansible_dokku_path/roles/geerlingguy.docker/tasks" ]]; then
+    dokku_log_verbose "Deleting ansible tasks from geerlingguy.docker module"
+    rm -r "$ansible_dokku_path/roles/geerlingguy.docker/tasks"
+  fi
+
+  if [[ -d "$ansible_dokku_path/roles/nginxinc.nginx/tasks" ]]; then
+    dokku_log_verbose "Deleting ansible tasks from nginxinc.nginx module"
+    rm -r "$ansible_dokku_path/roles/nginxinc.nginx/tasks"
+  fi
+
+  dokku_log_verbose "Executing ansible playbook"
+  ansible-playbook "$ansible_playbook_file" -i "$ansible_hosts_file" --extra-vars "app=$APP" | sed -u "s/^/       /"
+  if [[ "${PIPESTATUS[0]}" != 0 ]]; then
+    dokku_log_fail "Failed to run ansible"
+  fi
+}
+
+trigger-ansible-pre-receive-app "$@"
