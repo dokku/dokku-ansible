@@ -10,7 +10,7 @@ dokku 0.28.x+
 
 ```shell
 # on 0.19.x+
-sudo dokku plugin:install https://github.com/dokku/dokku-ansible.git ansible
+sudo dokku plugin:install https://github.com/dokku/dokku-ansible.git
 sudo dokku plugin:install-dependencies
 ```
 
